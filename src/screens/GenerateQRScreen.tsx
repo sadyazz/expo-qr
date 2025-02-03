@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Image, Modal, SafeAreaView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Image, Modal, SafeAreaView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import QRCode from 'qrcode';
+import QRCode from 'react-native-qrcode-svg';
 import { useColorScheme, useThemeColors } from '../hooks/useTheme';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 type QRType = 'text' | 'url' | 'wifi' | 'email' | 'phone' | 'social';
 
@@ -41,14 +43,18 @@ export default function GenerateQRScreen() {
   const [content, setContent] = useState('');
   const [wifiPassword, setWifiPassword] = useState('');
   const [wifiEncryption, setWifiEncryption] = useState<EncryptionType>('WPA');
-  const [qrImage, setQrImage] = useState<string>('');
   const [socialPlatform, setSocialPlatform] = useState<SocialPlatform>('instagram');
   const [isHidden, setIsHidden] = useState(false);
   const [isPickerVisible, setIsPickerVisible] = useState(false);
+  const [showQR, setShowQR] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [toast, setToast] = useState<{ show: boolean; message: string; isError: boolean }>({
+    show: false,
+    message: '',
+    isError: false
+  });
 
-  useEffect(() => {
-    generateQRCode();
-  }, [content, wifiPassword, selectedType]);
+  const qrRef = useRef<any>(null);
 
   const getQRContent = () => {
     switch (selectedType) {
@@ -76,24 +82,6 @@ export default function GenerateQRScreen() {
         return content.startsWith('http') ? content : `https://${content}`;
       default:
         return content;
-    }
-  };
-
-  const generateQRCode = async () => {
-    if (!content) {
-      setQrImage('');
-      return;
-    }
-    try {
-      const qrData = getQRContent();
-      const qrDataURL = await QRCode.toString(qrData, {
-        type: 'svg',
-        margin: 1,
-        width: 200,
-      });
-      setQrImage(`data:image/svg+xml;utf8,${encodeURIComponent(qrDataURL)}`);
-    } catch (err) {
-      console.error('QR Code generation error:', err);
     }
   };
 
@@ -251,6 +239,59 @@ export default function GenerateQRScreen() {
     );
   };
 
+  const handleDownload = async () => {
+    if (!content || !showQR) return;
+    setIsDownloading(true);
+    
+    try {
+      if (qrRef.current) {
+        const qrImage = await new Promise<string>((resolve) => {
+          qrRef.current.toDataURL(resolve);
+        });
+
+        const filename = `qr-code-${Date.now()}.png`;
+        const filepath = `${FileSystem.cacheDirectory}${filename}`;
+
+        await FileSystem.writeAsStringAsync(filepath, qrImage, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        await Sharing.shareAsync(filepath, {
+          mimeType: 'image/png',
+          dialogTitle: 'Save QR Code',
+        });
+        
+        setToast({
+          show: true,
+          message: 'QR Code saved successfully!',
+          isError: false
+        });
+        setTimeout(() => setToast({ show: false, message: '', isError: false }), 2000);
+      }
+    } catch (error) {
+      console.error('Error saving QR code:', error);
+      setToast({
+        show: true,
+        message: 'Failed to save QR code',
+        isError: true
+      });
+      setTimeout(() => setToast({ show: false, message: '', isError: false }), 2000);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleGenerate = () => {
+    setShowQR(true);
+  };
+
+  const canGenerate = selectedType === 'wifi' ? 
+    (content && wifiEncryption) : content;
+
+  useEffect(() => {
+    setShowQR(false);
+  }, [content, wifiPassword, selectedType, socialPlatform, isHidden]);
+
   const styles = StyleSheet.create({
     mainContainer: {
       flex: 1,
@@ -348,7 +389,7 @@ export default function GenerateQRScreen() {
     qrContainer: {
       alignItems: 'center',
       justifyContent: 'center',
-      padding: 20,
+      padding: 10,
       backgroundColor: 'white',
       borderRadius: 16,
       elevation: 4,
@@ -358,6 +399,7 @@ export default function GenerateQRScreen() {
       shadowRadius: 4,
       aspectRatio: 1,
       width: '100%',
+      alignSelf: 'center',
     },
     qrImage: {
       width: '100%',
@@ -482,6 +524,44 @@ export default function GenerateQRScreen() {
     downloadButtonDisabled: {
       backgroundColor: '#ffd0e0',
     },
+    generateButton: {
+      backgroundColor: '#F06292',
+      padding: 12,
+      borderRadius: 8,
+      alignItems: 'center',
+      marginTop: 16,
+    },
+    generateButtonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    toast: {
+      position: 'absolute',
+      bottom: 100,
+      left: 20,
+      right: 20,
+      backgroundColor: '#A5D6A7',
+      padding: 16,
+      borderRadius: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      elevation: 5,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 3.84,
+    },
+    toastText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: '500',
+    },
+    toastError: {
+      backgroundColor: '#EF9A9A',
+    },
   });
 
   return (
@@ -500,6 +580,7 @@ export default function GenerateQRScreen() {
                   setSelectedType(type.type);
                   setContent('');
                   setWifiPassword('');
+                  setShowQR(false);
                 }}
               >
                 <Ionicons 
@@ -520,13 +601,25 @@ export default function GenerateQRScreen() {
 
         <View style={styles.inputSection}>
           {renderInputFields()}
+          {canGenerate && (
+            <TouchableOpacity
+              style={styles.generateButton}
+              onPress={handleGenerate}
+            >
+              <Text style={styles.generateButtonText}>Generate QR Code</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {qrImage && (
+        {canGenerate && showQR && (
           <View style={styles.qrContainer}>
-            <Image
-              source={{ uri: qrImage }}
-              style={styles.qrImage}
+            <QRCode
+              value={getQRContent()}
+              size={250}
+              color="black"
+              backgroundColor="white"
+              getRef={(ref) => (qrRef.current = ref)}
+              quietZone={20}
             />
           </View>
         )}
@@ -535,20 +628,28 @@ export default function GenerateQRScreen() {
         <TouchableOpacity
           style={[
             styles.downloadButton,
-            !content && styles.downloadButtonDisabled
+            (!content || !showQR) && styles.downloadButtonDisabled
           ]}
-          onPress={() => {
-            
-          }}
-          disabled={!content}
+          onPress={handleDownload}
+          disabled={!content || !showQR || isDownloading}
         >
           <Ionicons 
-            name="download-outline" 
+            name={isDownloading ? "hourglass-outline" : "download-outline"}
             size={24} 
             color="white" 
           />
         </TouchableOpacity>
       </View>
+      {toast.show && (
+        <View style={[styles.toast, toast.isError && styles.toastError]}>
+          <Ionicons 
+            name={toast.isError ? "close-circle" : "checkmark-circle"} 
+            size={24} 
+            color="white" 
+          />
+          <Text style={styles.toastText}>{toast.message}</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 } 
