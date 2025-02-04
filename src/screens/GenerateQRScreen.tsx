@@ -53,6 +53,8 @@ export default function GenerateQRScreen() {
     message: '',
     isError: false
   });
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
 
   const qrRef = useRef<any>(null);
 
@@ -61,6 +63,9 @@ export default function GenerateQRScreen() {
       case 'wifi':
         return `WIFI:T:${wifiEncryption};S:${content};P:${wifiPassword};;`;
       case 'email':
+        if (emailSubject || emailMessage) {
+          return `MATMSG:TO:${content};SUB:${emailSubject};BODY:${emailMessage};;`;
+        }
         return `mailto:${content}`;
       case 'phone':
         return `tel:${content}`;
@@ -220,11 +225,45 @@ export default function GenerateQRScreen() {
       );
     }
 
+    if (selectedType === 'email') {
+      return (
+        <View>
+          <Text style={styles.inputLabel}>Email Address <Text style={{color: '#F06292'}}>*</Text></Text>
+          <TextInput
+            style={styles.input}
+            placeholder="email@example.com"
+            value={content}
+            onChangeText={setContent}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          
+          <Text style={styles.inputLabel}>Subject</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Email subject (optional)"
+            value={emailSubject}
+            onChangeText={setEmailSubject}
+          />
+          
+          <Text style={styles.inputLabel}>Message</Text>
+          <TextInput
+            style={[styles.input, styles.messageInput]}
+            placeholder="Email message (optional)"
+            value={emailMessage}
+            onChangeText={setEmailMessage}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+        </View>
+      );
+    }
+
     return (
       <View>
         <Text style={styles.inputLabel}>
           {selectedType === 'url' ? 'Website URL' : 
-           selectedType === 'email' ? 'Email Address' :
            selectedType === 'phone' ? 'Phone Number' : 
            'Text'} <Text style={{color: '#F06292'}}>*</Text>
         </Text>
@@ -561,6 +600,10 @@ export default function GenerateQRScreen() {
     },
     toastError: {
       backgroundColor: '#EF9A9A',
+    },
+    messageInput: {
+      height: 100,
+      paddingTop: 12,
     },
   });
 
