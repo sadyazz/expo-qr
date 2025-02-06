@@ -15,9 +15,11 @@
     "expo": "~52.0.28",
     "expo-barcode-scanner": "^13.0.1",
     "expo-camera": "~16.0.14",
+    "expo-capture": "^0.1.0",
     "expo-file-system": "~18.0.8",
     "expo-sharing": "~13.0.1",
     "expo-status-bar": "~2.0.1",
+    "expo-updates": "~0.26.16",
     "react": "18.3.1",
     "react-native": "0.76.6",
     "react-native-pager-view": "6.5.1",
@@ -26,7 +28,9 @@
     "react-native-screens": "~4.4.0",
     "react-native-svg": "15.8.0",
     "react-native-tab-view": "^4.0.5",
-    "react-native-wifi-reborn": "^4.13.4"
+    "react-native-wifi-reborn": "^4.13.4",
+    "react-native-view-shot": "~4.0.3",
+    "expo-media-library": "~17.0.5"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

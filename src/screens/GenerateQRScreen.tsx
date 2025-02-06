@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Image, Modal, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Image, Modal, SafeAreaView, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import { useColorScheme, useThemeColors } from '../hooks/useTheme';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { captureRef } from 'react-native-view-shot';
+import * as MediaLibrary from 'expo-media-library';
 
 type QRType = 'text' | 'url' | 'wifi' | 'email' | 'phone' | 'social';
 
@@ -56,7 +58,7 @@ export default function GenerateQRScreen() {
   const [emailSubject, setEmailSubject] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
 
-  const qrRef = useRef<any>(null);
+  const qrRef = useRef<View>(null);
 
   const getQRContent = () => {
     switch (selectedType) {
@@ -281,44 +283,54 @@ export default function GenerateQRScreen() {
   const handleDownload = async () => {
     if (!content || !showQR) return;
     setIsDownloading(true);
-    
+  
     try {
-      if (qrRef.current) {
-        const qrImage = await new Promise<string>((resolve) => {
-          qrRef.current.toDataURL(resolve);
-        });
-
-        const filename = `qr-code-${Date.now()}.png`;
-        const filepath = `${FileSystem.cacheDirectory}${filename}`;
-
-        await FileSystem.writeAsStringAsync(filepath, qrImage, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        await Sharing.shareAsync(filepath, {
-          mimeType: 'image/png',
-          dialogTitle: 'Save QR Code',
-        });
-        
-        setToast({
-          show: true,
-          message: 'QR Code saved successfully!',
-          isError: false
-        });
-        setTimeout(() => setToast({ show: false, message: '', isError: false }), 2000);
+      const uri = await captureRef(qrRef, {
+        format: 'png',
+        quality: 1,
+        result: 'data-uri',
+      });
+  
+      const filename = `qr-code-${Date.now()}.png`;
+      const filepath = `${FileSystem.cacheDirectory}${filename}`;
+  
+      await FileSystem.writeAsStringAsync(filepath, uri.split(',')[1], {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+  
+      try {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status === 'granted') {
+          await MediaLibrary.saveToLibraryAsync(filepath);
+        }
+      } catch (saveError) {
+        console.log('Saving to library skipped:', saveError);
       }
-    } catch (error) {
-      console.error('Error saving QR code:', error);
+  
+      await Sharing.shareAsync(filepath, {
+        mimeType: 'image/png',
+        dialogTitle: 'Share QR Code',
+        UTI: 'public.png', // Specific to iOS
+      });
+  
       setToast({
         show: true,
-        message: 'Failed to save QR code',
-        isError: true
+        message: 'QR Code shared successfully!',
+        isError: false,
       });
-      setTimeout(() => setToast({ show: false, message: '', isError: false }), 2000);
+    } catch (error) {
+      console.error('Error sharing QR code:', error);
+      setToast({
+        show: true,
+        message: error instanceof Error ? error.message : 'Failed to share QR code',
+        isError: true,
+      });
     } finally {
       setIsDownloading(false);
+      setTimeout(() => setToast({ show: false, message: '', isError: false }), 2000);
     }
   };
+  
 
   const handleGenerate = () => {
     setShowQR(true);
@@ -655,17 +667,17 @@ export default function GenerateQRScreen() {
         </View>
 
         {canGenerate && showQR && (
-          <View style={styles.qrContainer}>
-            <QRCode
-              value={getQRContent()}
-              size={250}
-              color="black"
-              backgroundColor="white"
-              getRef={(ref) => (qrRef.current = ref)}
-              quietZone={20}
-            />
-          </View>
-        )}
+  <View style={styles.qrContainer} ref={qrRef}>
+    <QRCode
+      value={getQRContent()}
+      size={250}
+      color="black"
+      backgroundColor="white"
+      quietZone={20}
+      ecl="H"
+    />
+  </View>
+)}
       </ScrollView>
       <View style={styles.downloadButtonContainer}>
         <TouchableOpacity
