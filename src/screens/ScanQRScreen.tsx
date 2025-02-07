@@ -3,6 +3,7 @@ import { Text, View, StyleSheet, Vibration, Linking, TouchableOpacity, Alert } f
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import WifiManager from 'react-native-wifi-reborn';
+import { useIsFocused } from '@react-navigation/native';
 
 export default function ScanQRScreen() {
   const [scanned, setScanned] = useState(false);
@@ -17,14 +18,18 @@ export default function ScanQRScreen() {
   });
 
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+  const isFocused = useIsFocused();
 
   useEffect(() => {
-    return () => {
+    if (!isFocused) {
+      setScanned(false);
+      setIsHandling(false);
       if (debounceTimeout.current) {
         clearTimeout(debounceTimeout.current);
+        debounceTimeout.current = null;
       }
-    };
-  }, []);
+    }
+  }, [isFocused]);
 
   if (!permission) {
     return (
@@ -368,6 +373,7 @@ export default function ScanQRScreen() {
 
   return (
     <View style={styles.container}>
+      {isFocused ? (
       <CameraView
         style={styles.scanner}
         facing="back"
@@ -404,6 +410,7 @@ export default function ScanQRScreen() {
           </TouchableOpacity>
         </View> */}
       </CameraView>
+      ) : null}
 
       {scanned && (
         <View style={styles.scanAgainContainer}>
